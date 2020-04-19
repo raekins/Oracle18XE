@@ -1,0 +1,43 @@
+---
+# Install MultiPath
+- name: device-mapper-multipath
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages: 
+    - device-mapper-multipath
+    - device-mapper-multipath-libs
+
+# Enable Multipath
+- name: Enable MultiPath
+  shell: mpathconf --enable --with_multipathd y
+
+#  Multipath config
+- name: Multipath config
+  copy: src=files/multipath.conf dest=/etc/multipath.conf mode=0644
+
+# restart MP
+- name: service restart
+  shell: service multipathd restart
+
+- name: MP ll
+  shell: multipath -ll -v4
+
+# Install iscsi packages
+- name: install iscsi packages
+  yum:
+    name: "{{ packages }}"
+  vars:
+    packages:
+    - iscsi-initiator-utils
+
+#- systemd:
+#    name: iscsid.socket
+#    state: started
+#    enabled: yes
+
+- name: iscsid.socket start
+  service:
+    name: iscsid.socket
+    state: started
+    enabled: yes

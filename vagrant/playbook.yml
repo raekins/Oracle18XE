@@ -1,0 +1,29 @@
+---
+
+# Setup Oracle Linux Server
+
+- hosts: localhost
+  gather_facts: true
+  collections:
+    - purestorage.flasharray
+  vars_files:
+    - vars/setup.yml
+  become: true
+  become_method: sudo
+
+  roles:
+  - { role: setup_linux, tags: [ 'setup', 'linux'] }
+  - { role: setup_ansible, tags: [ 'setup', 'ansible'] }
+  - { role: setup_iscsi, tags: [ 'setup', 'iscsi'] }
+#  - { role: setup_pure, tags: [ 'setup', 'pure'] }
+  - { role: setup_oracle, tags: [ 'setup', 'oracle'] }
+
+- hosts: localhost
+  gather_facts: true
+  vars_files:
+   - vars/setup.yml
+  become: true
+  become_user: oracle
+
+  roles:
+  - { role: setup_oraUser, tags: [ 'setup', 'oracle'] }

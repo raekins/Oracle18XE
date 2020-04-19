@@ -1,0 +1,266 @@
+---
+
+# Install (Pure Storage SDK) python package.
+- pip:
+    name: purestorage
+
+- debug:
+      msg: "FlashArray is {{ faUrl }} {{ apiToken}}"
+
+# Get IQN of the host initiator
+# remove leading InitiatorName=
+- name: Get IQN
+  shell: cat /etc/iscsi/initiatorname.iscsi
+  register: result
+
+- set_fact:
+    iscsi_iqn: "{{ result.stdout[14:] }}"
+
+- debug:
+    msg: "Server IQN is {{ iscsi_iqn }}"
+
+- name: Create FlashArray Oracle Home Volume
+  purefa_volume:
+    name: "oracle_home"
+    size: "15G"
+    fa_url: "{{ faUrl }}"
+    api_token: "{{ apiToken }}"
+
+- name: Create FlashArray oradata Volume
+  purefa_volume:
+    name: "oradata"
+    size: "10G"
+    fa_url: "{{ faUrl }}"
+    api_token: "{{ apiToken }}"
+
+- name: Create FlashArray u01 Home Volume
+  purefa_volume:
+    name: "u01"
+    size: "5G"
+    fa_url: "{{ faUrl }}"
+    api_token: "{{ apiToken }}"
+
+- name: Connect oracle_home Volume
+  purefa_host:
+    host: "{{ ansible_hostname }}-iscsi"
+    protocol: iscsi
+    iqn:
+      - "{{ iscsi_iqn }}"
+    fa_url: "{{ faUrl }}"
+    volume: "oracle_home"
+    api_token: "{{ apiToken }}"
+
+- name: Connect oradata Volume
+  purefa_host:
+    host: "{{ ansible_hostname }}-iscsi"
+    protocol: iscsi
+    iqn:
+      - "{{ iscsi_iqn }}"
+    fa_url: "{{ faUrl }}"
+    volume: "oradata"
+    api_token: "{{ apiToken }}"
+
+- name: Connect u01 Volume
+  purefa_host:
+    host: "{{ ansible_hostname }}-iscsi"
+    protocol: iscsi
+    iqn:
+      - "{{ iscsi_iqn }}"
+    fa_url: "{{ faUrl }}"
+    volume: "u01"
+    api_token: "{{ apiToken }}"
+
+- name: collect volume information
+  purefa_info:
+    gather_subset:
+      - volumes
+    fa_url: "{{ faUrl }}"
+    api_token: "{{ apiToken }}"
+  register: array_info
+
+- name: set oradata volume details
+  set_fact:
+    oraUuid: "3624a9370{{ item.value.serial | lower }}"
+  with_dict: "{{ array_info.purefa_info.volumes }}"
+  when: item.key == "oradata"
+
+- name: debug
+  debug:
+    msg: "oradata = {{ oraUuid }}"
+    verbosity: 1
+
+- name: set oracle_home volume details
+  set_fact:
+    ohUuid: "3624a9370{{ item.value.serial | lower }}"
+  with_dict: "{{ array_info.purefa_info.volumes }}"
+  when: item.key == "oracle_home"
+
+- name: debug
+  debug:
+    msg: "oracle_home = {{ ohUuid }}"
+    verbosity: 1
+
+- name: set u01 volume details
+  set_fact:
+    u01Uuid: "3624a9370{{ item.value.serial | lower }}"
+  with_dict: "{{ array_info.purefa_info.volumes }}"
+  when: item.key == "u01"
+
+- name: debug
+  debug:
+    msg: "u01 {{ u01Uuid }}"
+    verbosity: 1
+
+# Perform discovery
+- name: Discover FlashArray IQN
+  shell: iscsiadm -m discovery -t st -p {{ faiScsi1 }}
+  register: result
+
+- set_fact:
+    iqn1: "{{ result.stdout_lines[0] }}"
+
+- set_fact:
+    faIqn1: "{{ iqn1[20:] }}"
+
+- debug:
+    msg: "IQN 1 is {{ faIqn1 }}"
+    verbosity: 1
+
+#- name: iscsi show node
+#  shell: iscsiadm -m node -o show
+#  ignore_errors: True
+
+- name: iscsi Login 
+  shell: iscsiadm -m node –login
+  ignore_errors: True
+  register: result
+
+- debug:
+    msg: "isci Login is {{ result.stdout }}"
+    verbosity: 1
+
+#- name: iscsi Show session
+#  shell: iscsiadm -m session -o show
+#  ignore_errors: True
+
+- name: enable automatic login
+  shell: iscsiadm -m node -L automatic
+
+- name: scsi rescan
+  shell: rescan-scsi-bus.sh
+  register: result
+
+- debug:
+    msg: "Rescan SCSI {{ result.stdout }}"
+#    verbosity: 1
+
+# Update /etc/multipath.conf
+- name: Multipath config
+  blockinfile:
+    path: /etc/multipath.conf
+    block: |
+      multipaths {
+           multipath {
+                  wwid        {{ ohUuid }}
+                  alias       "oracle_home"
+           } 
+           multipath {
+                  wwid        {{ oraUuid }}
+                  alias       "oradata"
+           } 
+           multipath {
+                  wwid        {{ u01Uuid }}
+                  alias       "u01"
+           } 
+      }
+
+# multipath -ll
+- name: List Multipath
+  shell: multipath -ll
+  register: result
+
+- debug:
+    msg: "Multipath list {{ result.stdout }}"
+#    verbosity: 1
+
+# multipath -F
+- name:  Flush Multipath
+  shell: multipath -F 
+  ignore_errors: True
+  register: result
+
+- debug:
+    msg: "Multipath flush {{ result.stdout }}"
+#    verbosity: 1
+
+# multipath -v2
+- name: Reload Multipath
+  shell: multipath -v2
+  register: result
+
+- debug:
+    msg: "Multipath reload {{ result.stdout }}"
+#    verbosity: 1
+
+# multipath -ll
+- name: List Multipath
+  shell: multipath -ll
+  register: result
+
+- debug:
+    msg: "Multipath list {{ result.stdout }}"
+#    verbosity: 1
+
+# Make Filesystem(s)
+- name: Create a ext4 filesystem on oracle home 
+  filesystem:
+    fstype: ext4
+    dev: /dev/mapper/oracle_home
+  ignore_errors: True
+
+- name: Create a ext4 filesystem on oradata 
+  filesystem:
+    fstype: ext4
+    dev: /dev/mapper/oradata
+  ignore_errors: True
+
+- name: Create a ext4 filesystem on u01
+  filesystem:
+    fstype: ext4
+    dev: /dev/mapper/u01
+  ignore_errors: True
+
+- name: Mount oradata
+  mount:
+    path: /opt/oracle/oradata
+    src: /dev/mapper/oradata
+    fstype: ext4
+    state: mounted 
+
+- name: Mount Oracle Home
+  mount:
+    path: /opt/oracle/product
+    src: /dev/mapper/oracle_home
+    fstype: ext4
+    state: mounted
+
+- name: Mount u01 Home
+  mount:
+    path: /u01
+    src: /dev/mapper/u01
+    fstype: ext4
+    state: mounted
+
+- name: Change ownership of /opt/oracle
+  file:
+    path: /opt/oracle
+    owner: oracle
+    group: oinstall
+    recurse: yes
+
+- name: Change ownership of /u01
+  file:
+    path: /u01
+    owner: tomcat
+    group: tomcat
+    recurse: yes

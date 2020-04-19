@@ -1,0 +1,55 @@
+# Update bash_profile
+- name: Update bash_profile
+  lineinfile:
+    path: /home/oracle/.bash_profile
+    state: present
+    line: "{{ item }}"
+  with_items:
+    - 'export PUREFA_URL={{ faUrl }} '
+    - 'export PUREFA_API={{ apiToken }} '
+    - '#export ANSIBLE_KEEP_REMOTE_FILES=1'
+    - 'export ORACLE_BASE=/opt/oracle'
+    - 'export ORACLE_HOME=$ORACLE_BASE/product/18c/dbhomeXE'
+    - 'export LD_LIBRARY_PATH=$ORACLE_HOME/lib'
+    - 'export ORACLE_SID=XE'
+    - 'export ORACLE_PATH=/home/oracle/sql'
+    - 'export PDB_NAME=XEPDB1'
+    - 'export JAVA_HOME=/u01/java/latest'
+    - '#export CATALINA_HOME=/u01/tomcat/latest'
+    - '#export CATALINA_BASE=/u01/tomcat/latest'
+    - 'export PATH=$PATH:$ORACLE_HOME/bin:$JAVA_HOME/bin'
+    - 'export PATH=$PATH:/vagrant/python'
+
+# Create Oracle Wallet directory
+- name: Create Oracle Wallet directory
+  file:
+    path: /opt/oracle/admin/XE/wallet
+    state: directory
+    mode: 0755
+
+# Create SQL directory
+- name: Create SQL directory
+  file:
+    path: /home/oracle/sql
+    state: directory
+    mode: 0755
+
+# Create Scripts directory
+- name: Create Scripts directory
+  file:
+    path: /home/oracle/scripts
+    state: directory
+    mode: 0755
+
+# Copy SQL files
+- name: Copy SQL files 
+  copy:
+    src: files/sql/
+    dest: /home/oracle/sql
+    mode: 0644
+
+# Unlock Oracle HR schema
+- name: Setup Oracle HR demo schema
+  shell: /vagrant/scripts/unlock_hr.sh > ~/unlock_hr.log 2>&1
+  args:
+    executable: /bin/bash

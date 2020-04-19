@@ -1,0 +1,9 @@
+[local]
+localhost ansible_connection=local
+
+[flasharrays]
+{{ faName }} array_token={{ apiToken }}
+
+[flasharrays:vars]
+ansible_connection=local
+api_version=1.14

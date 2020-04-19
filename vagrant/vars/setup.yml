@@ -1,0 +1,9 @@
+---
+#
+faUrl:      192.168.56.101
+faName:     v-purity
+apiToken:   752a0bc2-0c36-7380-f189-6b05b3612fd4
+#
+faiScsi1:   172.16.0.101
+faiScsi2:   172.16.0.102
+#
